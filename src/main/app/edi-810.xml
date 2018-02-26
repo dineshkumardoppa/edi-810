@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:x12-edi="http://www.mulesoft.org/schema/mule/x12-edi" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/x12-edi http://www.mulesoft.org/schema/mule/x12-edi/current/mule-x12-edi.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+    <x12-edi:config name="X12_EDI" doc:name="X12 EDI"    interchangeIdQualifierPartner="ZZ" interchangeIdQualifierSelf="ZZ"  includeFASchema="false">
+        <x12-edi:schemas>
+            <x12-edi:schema>/x12/006020/810.esl</x12-edi:schema>
+        </x12-edi:schemas>
+    </x12-edi:config>
+    <flow name="edi-810Flow">
+        <file:inbound-endpoint path="src\main\resources\input" moveToDirectory="src\main\resources\output" responseTimeout="10000" doc:name="File"/>
+        <x12-edi:read config-ref="X12_EDI" doc:name="X12 EDI"/>
+        <batch:execute name="edi-810Batch" doc:name="Batch Execute"/>
+    </flow>
+    <batch:job name="edi-810Batch">
+        <batch:input>
+            <dw:transform-message doc:name="Transform Message">
+                <dw:input-payload doc:sample="sample_data\v006020_1.dwl"/>
+                <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload.TransactionSets.v006020."810".Detail]]></dw:set-payload>
+            </dw:transform-message>
+        </batch:input>
+        <batch:process-records>
+            <batch:step name="Batch_Step">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/csv
+---
+payload."0100_IT1_Loop"  map {
+	 "id" :  $.'0100_IT1'.'IT101',
+	 "Unit price" : $.'0100_IT1'.'IT104',
+	 "total amount" :  $.'0100_IT1'.'IT104' * $.'0100_IT1'.'IT102'
+} ]]></dw:set-payload>
+                </dw:transform-message>
+                <logger level="INFO" doc:name="Logger"/>
+                <file:outbound-endpoint path="src\main\resources\outputFile" outputPattern="convertedFile.csv" responseTimeout="10000" doc:name="File"/>
+            </batch:step>
+        </batch:process-records>
+    </batch:job>
+</mule>
